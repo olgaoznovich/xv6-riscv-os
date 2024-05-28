@@ -8,5 +8,5 @@ main(int argc, char *argv[])
     char* str = "Hello World\n";
     write(1, str, strlen(str));
 
-    exit(0);
+    exit(0,0);
 }

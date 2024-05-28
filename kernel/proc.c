@@ -344,8 +344,9 @@ reparent(struct proc *p)
 // An exited process remains in the zombie state
 // until its parent calls wait().
 void
-exit(int status)
+exit(int status, char* exitMsg)
 {
+  printf("proc.c 349 hehe : %s\n", exitMsg);
   struct proc *p = myproc();
 
   if(p == initproc)
@@ -359,7 +360,7 @@ exit(int status)
       p->ofile[fd] = 0;
     }
   }
-
+  
   begin_op();
   iput(p->cwd);
   end_op();
@@ -378,6 +379,12 @@ exit(int status)
   p->xstate = status;
   p->state = ZOMBIE;
 
+  if(exitMsg == 0x0) {
+    exitMsg = "No exit message";
+  }
+  printf("proc.c 389 hehe : %p\n", exitMsg);
+  strncpy(p->exit_msg, exitMsg, 32);
+
   release(&wait_lock);
 
   // Jump into the scheduler, never to return.
@@ -388,7 +395,7 @@ exit(int status)
 // Wait for a child process to exit and return its pid.
 // Return -1 if this process has no children.
 int
-wait(uint64 addr)
+wait(uint64 addr, char* exitMsg)
 {
   struct proc *pp;
   int havekids, pid;
@@ -408,6 +415,12 @@ wait(uint64 addr)
         if(pp->state == ZOMBIE){
           // Found one.
           pid = pp->pid;
+          if(exitMsg != 0x0 && copyout(p->pagetable, (uint64)exitMsg, (char *)&pp->exit_msg,
+                                  sizeof(pp->exit_msg)) < 0) {
+            release(&pp->lock);
+            release(&wait_lock);
+            return -1;
+          }
           if(addr != 0 && copyout(p->pagetable, addr, (char *)&pp->xstate,
                                   sizeof(pp->xstate)) < 0) {
             release(&pp->lock);
