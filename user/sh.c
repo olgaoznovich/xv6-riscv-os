@@ -12,6 +12,8 @@
 #define BACK  5
 
 #define MAXARGS 10
+char waitbuff[32];
+
 
 struct cmd {
   int type;
@@ -94,7 +96,7 @@ runcmd(struct cmd *cmd)
     lcmd = (struct listcmd*)cmd;
     if(fork1() == 0)
       runcmd(lcmd->left);
-    wait(0, "");
+    wait(0, waitbuff);
     runcmd(lcmd->right);
     break;
 
@@ -118,8 +120,9 @@ runcmd(struct cmd *cmd)
     }
     close(p[0]);
     close(p[1]);
-    wait(0, "");
-    wait(0, "");
+    wait(0, waitbuff);
+    wait(0, waitbuff);
+
     break;
 
   case BACK:
@@ -128,7 +131,7 @@ runcmd(struct cmd *cmd)
       runcmd(bcmd->cmd);
     break;
   }
-  exit(0,0);
+  exit(0,"");
 }
 
 int
@@ -170,10 +173,9 @@ main(void)
       runcmd(parsecmd(buf));
     char buff[32];
     wait(0, buff);
-    printf("line 173: %p\n", buff);
-    printf("line 174: %s\n", buff);
+    printf("%s\n", buff);
   }
-  exit(0,0);
+  exit(0,"");
 }
 
 void

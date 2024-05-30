@@ -346,7 +346,6 @@ reparent(struct proc *p)
 void
 exit(int status, char* exitMsg)
 {
-  printf("proc.c 349 hehe : %s\n", exitMsg);
   struct proc *p = myproc();
 
   if(p == initproc)
@@ -361,10 +360,13 @@ exit(int status, char* exitMsg)
     }
   }
   
+
   begin_op();
   iput(p->cwd);
   end_op();
   p->cwd = 0;
+
+  
 
   acquire(&wait_lock);
 
@@ -382,7 +384,6 @@ exit(int status, char* exitMsg)
   if(exitMsg == 0x0) {
     exitMsg = "No exit message";
   }
-  printf("proc.c 389 hehe : %p\n", exitMsg);
   strncpy(p->exit_msg, exitMsg, 32);
 
   release(&wait_lock);

@@ -10,6 +10,8 @@
 #include "kernel/fcntl.h"
 
 char *argv[] = { "sh", 0 };
+char waitbuff[32];
+
 
 int
 main(void)
@@ -39,7 +41,7 @@ main(void)
     for(;;){
       // this call to wait() returns if the shell exits,
       // or if a parentless process exits.
-      wpid = wait((int *) 0, "");
+      wpid = wait((int *) 0, waitbuff);
       if(wpid == pid){
         // the shell exited; restart it.
         break;
