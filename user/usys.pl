@@ -37,4 +37,6 @@ entry("sbrk");
 entry("sleep");
 entry("uptime");
 entry("memsize");
+entry("set_affinity_mask");
+
 

@@ -48,11 +48,11 @@ void
 procinit(void)
 {
   struct proc *p;
-  
   initlock(&pid_lock, "nextpid");
   initlock(&wait_lock, "wait_lock");
   for(p = proc; p < &proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
+      p->affinity_mask = 0;
       p->state = UNUSED;
       p->kstack = KSTACK((int) (p - proc));
   }
@@ -124,6 +124,7 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
+  p->affinity_mask = 0;
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -161,6 +162,7 @@ freeproc(struct proc *p)
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
   p->pagetable = 0;
+  p->affinity_mask = 0;
   p->sz = 0;
   p->pid = 0;
   p->parent = 0;
@@ -295,7 +297,7 @@ fork(void)
     return -1;
   }
   np->sz = p->sz;
-
+  np->affinity_mask = p->affinity_mask;
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
 
@@ -472,10 +474,14 @@ scheduler(void)
         // Switch to chosen process.  It is the process's job
         // to release its lock and then reacquire it
         // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
-
+        int cid = cpuid(); 
+        int affMask = p->affinity_mask;
+        if(affMask == 0 ||  ((affMask >> cid) & 1)) {
+          printf("running process id: %d on cpu id: %d\n", p->pid ,cid);
+          p->state = RUNNING;
+          c->proc = p;
+          swtch(&c->context, &p->context);
+        }
         // Process is done running for now.
         // It should have changed its p->state before coming back.
         c->proc = 0;
