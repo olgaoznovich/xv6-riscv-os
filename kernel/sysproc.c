@@ -103,5 +103,6 @@ sys_memsize(void)
 
 uint64 sys_set_affinity_mask(void) {
   argint(0, &myproc()->affinity_mask);
+  myproc()->effective_affinity_mask = myproc()->affinity_mask;
   return 0;
 }
