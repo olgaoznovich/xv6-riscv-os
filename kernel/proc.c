@@ -6,11 +6,14 @@
 #include "proc.h"
 #include "defs.h"
 
+
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
 
 struct proc *initproc;
+struct channel channels[NCHANELS];
+
 
 int nextpid = 1;
 struct spinlock pid_lock;
@@ -360,6 +363,14 @@ exit(int status)
     }
   }
 
+  struct channel *c;
+  for (c = channels; c < &channels[NCHANELS]; c++)
+  {
+    if(c->parent == p){
+      channel_destroy(c->cdescriptor);
+    }
+  }
+
   begin_op();
   iput(p->cwd);
   end_op();
@@ -595,6 +606,14 @@ kill(int pid)
         // Wake process from sleep().
         p->state = RUNNABLE;
       }
+      struct channel *c;
+      for (c = channels; c < &channels[NCHANELS]; c++)
+      {
+        if(c->parent == p){
+          channel_destroy(c->cdescriptor);
+        }
+      }
+      
       release(&p->lock);
       return 0;
     }
@@ -681,3 +700,132 @@ procdump(void)
     printf("\n");
   }
 }
+
+
+void 
+channelinit()
+{
+    struct channel *c;
+    int i = 0;
+    for (c = channels; c < &channels[NCHANELS]; c++)
+    {
+        initlock(&c->lock, "channel");
+        c->cdescriptor = i;
+        c->data = 0;
+        c->dataAvailable = 0;
+        c->parent = 0;
+        c->state = C_UNUSED;
+        i++;
+    }
+}
+
+int
+channel_create(void)
+{
+    struct channel *c;
+    for (c = channels; c < &channels[NCHANELS]; c++)
+    {
+        acquire(&c->lock);
+        if(c->state == C_UNUSED){
+            c->data = 0;
+            c->dataAvailable = 0;
+            c->parent = myproc();
+            c->state = C_USED;
+            release(&c->lock);
+            return c->cdescriptor;
+        }
+        release(&c->lock);
+    }
+    return -1;
+    
+}
+
+int 
+channel_put(int cd, int data)
+{   
+    if(cd < 0 || cd >= NCHANELS){
+        return -1;
+    }
+
+    struct channel *c = &channels[cd];
+    acquire(&c->lock);
+    printf("put acquired\n");
+    if(c->state == C_UNUSED){
+        release(&c->lock);
+        return -1;
+    }
+    printf("put dataAvailable=%d\n", c->dataAvailable);
+    while(c->dataAvailable == 1 && c->state == C_USED){
+        sleep(c, &c->lock);
+    }
+    printf("put woke up\n");
+    if(c->state == C_UNUSED){
+        release(&c->lock);
+        return -1;
+    }
+    
+    c->data = data;
+    c->dataAvailable = 1;
+    release(&c->lock);
+    wakeup(c);
+    return 0;
+}
+int 
+channel_take(int cd, uint64 data)
+{
+    if(cd < 0 || cd >= NCHANELS){
+        return -1;
+    }
+
+    struct channel *c = &channels[cd];
+    acquire(&c->lock);
+    printf("take acquired\n");
+    if(c->state == C_UNUSED){
+        release(&c->lock);
+        return -1;
+    }
+    printf("take dataAvailable=%d\n", c->dataAvailable);
+    while(c->dataAvailable == 0 &&  c->state == C_USED){
+        sleep(c, &c->lock);
+    }
+    printf("take woke up\n");
+    if(c->state == C_UNUSED){
+        release(&c->lock);
+        return -1;
+    }
+    struct proc *p = myproc();
+    if(copyout(p->pagetable, (uint64)data, (char*)&c->data, sizeof(c->data)) < 0){
+        printf("Failed copyout");
+        release(&c->lock);
+        return -1;
+    }
+
+    c->dataAvailable = 0;
+    release(&c->lock);
+    wakeup(c);
+    return 0;
+}
+int 
+channel_destroy(int cd)
+{
+
+    if(cd < 0 || cd >= NCHANELS){
+        return -1;
+    }
+
+    struct channel *c = &channels[cd];
+    acquire(&c->lock);
+    if(c->state == C_UNUSED){
+        release(&c->lock);
+        return -1;
+    }
+    c->data = 0;
+    c->dataAvailable = 0;
+    c->parent = 0;
+    c->state = C_UNUSED;
+    release(&c->lock);
+    printf("Destroy cd=%d\n", cd);
+    return 0;
+}
+
+
