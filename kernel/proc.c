@@ -749,18 +749,16 @@ channel_put(int cd, int data)
 
     struct channel *c = &channels[cd];
     acquire(&c->lock);
-    printf("put acquired\n");
     if(c->state == C_UNUSED){
         release(&c->lock);
         return -1;
     }
-    printf("put dataAvailable=%d\n", c->dataAvailable);
     while(c->dataAvailable == 1 && c->state == C_USED){
         sleep(c, &c->lock);
     }
-    printf("put woke up\n");
     if(c->state == C_UNUSED){
         release(&c->lock);
+        wakeup(c);
         return -1;
     }
     
@@ -779,23 +777,20 @@ channel_take(int cd, uint64 data)
 
     struct channel *c = &channels[cd];
     acquire(&c->lock);
-    printf("take acquired\n");
     if(c->state == C_UNUSED){
         release(&c->lock);
         return -1;
     }
-    printf("take dataAvailable=%d\n", c->dataAvailable);
     while(c->dataAvailable == 0 &&  c->state == C_USED){
         sleep(c, &c->lock);
     }
-    printf("take woke up\n");
     if(c->state == C_UNUSED){
         release(&c->lock);
+        wakeup(c);
         return -1;
     }
     struct proc *p = myproc();
     if(copyout(p->pagetable, (uint64)data, (char*)&c->data, sizeof(c->data)) < 0){
-        printf("Failed copyout");
         release(&c->lock);
         return -1;
     }
@@ -823,8 +818,8 @@ channel_destroy(int cd)
     c->dataAvailable = 0;
     c->parent = 0;
     c->state = C_UNUSED;
+    wakeup(c);
     release(&c->lock);
-    printf("Destroy cd=%d\n", cd);
     return 0;
 }
 
